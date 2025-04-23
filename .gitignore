@@ -1,0 +1,21 @@
+# Python files
+__pycache__/
+*.pyc
+*.pyo
+
+# Model files
+*.bin
+*.pt
+*.pth
+*.safetensors
+models/
+deepseek-1.5B-finetuned/
+
+# Environments
+.venv/
+env/
+venv/
+
+# Other
+.DS_Store
+*.log
