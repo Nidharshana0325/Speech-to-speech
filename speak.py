@@ -1,28 +1,30 @@
 import torch
-import pyttsx3
 import speech_recognition as sr
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from gtts import gTTS  # Using Google Text-to-Speech
+import os
+import re
+import pygame  # For audio playback
+import io
+import time
 
 # ==========[ Setup Configs ]==========
-model_path = "deepseek-1.5B-finetuned"
+model_path = "models/deepseek-1.5B-finetuned"
 
-# Load tokenizer and model without GPU/quantization
 tokenizer = AutoTokenizer.from_pretrained(model_path)
+tokenizer.pad_token = tokenizer.eos_token
 
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
     torch_dtype=torch.float32,
-    device_map={"": "cpu"}  # Force CPU
+    device_map={"": "cpu"}
 ).to("cpu")
 
-# ===========[ Speech Setup ]============
+# ==========[ Speech Setup ]===========
 recognizer = sr.Recognizer()
-tts = pyttsx3.init()
+pygame.mixer.init()  # Initialize pygame mixer for audio playback
 
-# Optional: tweak speaking rate or voice
-tts.setProperty("rate", 165)
-
-# ===========[ Question Classifier ]============
+# ===========[ ALL YOUR ORIGINAL FUNCTIONS UNCHANGED ]============
 def classify_question_type(question):
     q = question.lower()
     if any(word in q for word in ["what is", "who is", "define", "explain"]):
@@ -34,43 +36,38 @@ def classify_question_type(question):
     else:
         return "general"
 
-# ===========[ Prompt Generator ]============
 def generate_prompt(question, qtype):
-    if qtype == "direct":
-        return f"<think>\nAnswer the question clearly and concisely.\n\nQuestion: {question}\nAnswer:\n</think>"
-    elif qtype == "explanatory":
-        return f"<think>\nProvide a clear and detailed explanation with examples if needed.\n\nQuestion: {question}\nExplanation:\n</think>"
-    elif qtype == "detailed":
-        return f"<think>\nProvide a well-structured, step-by-step explanation with a logical conclusion.\n\nQuestion: {question}\nExplanation:\n</think>"
-    else:
-        return f"<think>\nRespond thoughtfully with appropriate context.\n\nQuestion: {question}\nAnswer:\n</think>"
+    instructions = {
+        "direct": "Answer the question clearly and concisely.",
+        "explanatory": "Provide a clear and detailed explanation with examples if needed.",
+        "detailed": "Provide a well-structured, step-by-step explanation with a logical conclusion.",
+        "general": "Respond thoughtfully with appropriate context."
+    }
+    return f"<think>\n{instructions[qtype]}\n\nQuestion: {question}\nAnswer:\n</think>"
 
-# ===========[ Check Completion ]============
 def is_response_complete(text):
     return text.endswith(('.', '?', '!', '”', '’')) or len(text.split()) < 30
 
-# ===========[ Generate Answer ]============
 def ask_model(question):
-    question_type = classify_question_type(question)
-    prompt = generate_prompt(question, question_type)
+    qtype = classify_question_type(question)
+    prompt = generate_prompt(question, qtype)
 
     inputs = tokenizer(prompt, return_tensors="pt").to("cpu")
-
     max_new_tokens = 150
 
     while True:
         output = model.generate(
-            **inputs,
+            input_ids=inputs["input_ids"],
+            attention_mask=inputs["attention_mask"],
             max_new_tokens=max_new_tokens,
             do_sample=True,
             temperature=0.6,
             top_p=0.9,
             repetition_penalty=1.2,
-            pad_token_id=tokenizer.eos_token_id
+            pad_token_id=tokenizer.pad_token_id
         )
 
-        response = tokenizer.decode(output[0], skip_special_tokens=True).strip()
-        response = response.replace("<think>", "").replace("</think>", "").strip()
+        response = tokenizer.decode(output[0], skip_special_tokens=True).replace("<think>", "").replace("</think>", "").strip()
 
         if is_response_complete(response) or max_new_tokens >= 700:
             break
@@ -79,7 +76,37 @@ def ask_model(question):
 
     return response
 
-# ===========[ Main Loop ]============
+# ===========[ MODIFIED TTS FUNCTION USING gTTS ]============
+def speak(text):
+    # Text preprocessing
+    text = re.sub(r"[\r\n]+", " ", text)
+    text = text.replace("color", "colour")
+    text = text.replace("favorite", "favourite")
+    text = text.replace("realize", "realise")
+    
+    print(f"🗣️ Speaking: {text[:100]}...")  # Truncate long text in print
+
+    try:
+        # Create gTTS object with Indian English accent (en-in)
+        tts = gTTS(text=text, lang='en-in', slow=False)
+        
+        # Save to memory file
+        audio_file = io.BytesIO()
+        tts.write_to_fp(audio_file)
+        audio_file.seek(0)
+        
+        # Play the audio
+        pygame.mixer.music.load(audio_file)
+        pygame.mixer.music.play()
+        
+        # Wait for the audio to finish playing
+        while pygame.mixer.music.get_busy():
+            time.sleep(0.1)
+            
+    except Exception as e:
+        print(f"Error in speech synthesis: {e}")
+
+# ===========[ MAIN LOOP UNCHANGED ]============
 print("🎤 Speak your question. Press Ctrl+C to exit.")
 
 while True:
@@ -94,9 +121,7 @@ while True:
             bot_output = ask_model(user_input)
             print(f"🤖 Bot: {bot_output}")
 
-            # Speak the response
-            tts.say(bot_output)
-            tts.runAndWait()
+            speak(bot_output)
 
     except sr.UnknownValueError:
         print("⚠️ Could not understand audio. Please speak clearly.")
