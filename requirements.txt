@@ -1,4 +1,22 @@
-torch==2.1.0
-pyttsx3==2.90
-speechrecognition==3.8.1
-transformers==4.29.0
+# Core dependencies
+torch>=2.0.0
+SpeechRecognition>=3.10.0
+transformers>=4.30.0
+gTTS>=2.3.1
+pygame>=2.1.2
+
+# Audio processing (required for SpeechRecognition)
+PyAudio>=0.2.13 ; sys_platform != "linux"  # Usually needed for Windows/Mac
+pocketsphinx>=0.1.15 ; sys_platform == "linux"  # Alternative for Linux
+
+# Hugging Face ecosystem (transformers dependencies)
+tokenizers>=0.13.0
+accelerate>=0.20.0
+safetensors>=0.3.0
+
+# Text processing utilities
+regex>=2022.10.31
+protobuf>=3.20.0  # Often required by transformers
+
+# For potential file operations (used by gTTS/pygame)
+python-dotenv>=0.19.0  # If you later add config files
