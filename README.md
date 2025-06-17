@@ -18,6 +18,9 @@
 - **DeepSeek (Fine-tuned)** – As the core LLM for generating answers
 - **Python** – Backend logic and integration
 
+## Model
+https://www.kaggle.com/code/nidharshana/ekadyu-query-bot 
+
 ## Demo
 
 
